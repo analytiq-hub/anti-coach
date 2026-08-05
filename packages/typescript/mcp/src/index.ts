@@ -1401,7 +1401,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           
           // Write file to disk
-          const fileBuffer = Buffer.from(fileResult.content);
+          if (fileResult.content == null) {
+            throw new Error('Document content is empty');
+          }
+          const fileBuffer = Buffer.from(fileResult.content as ArrayBuffer);
           writeFileSync(finalPath, fileBuffer);
           
           response.saved_path = finalPath;
@@ -1512,9 +1515,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_llm_result': {
         const result = await docrouterClient.getLLMResult({
           documentId: getArg(args, 'documentId'),
-          promptId: getOptionalArg(args, 'promptId', undefined),
-          promptRevId: getOptionalArg(args, 'promptRevId', undefined),
-          promptRevIdFallback: getOptionalArg(args, 'promptRevIdFallback', undefined),
+          promptId: getOptionalArg<string>(args, 'promptId'),
+          promptRevId: getOptionalArg<string>(args, 'promptRevId'),
+          promptRevIdFallback: getOptionalArg<boolean>(args, 'promptRevIdFallback'),
+          fallback: getOptionalArg<boolean>(args, 'fallback'),
         });
         return {
           content: [

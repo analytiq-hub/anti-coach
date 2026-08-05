@@ -1,7 +1,7 @@
 """
-Persistence for document agent and KB chat threads.
+Persistence for chat threads (account chat, document agent, KB chat).
 Stored in MongoDB collection chat_threads; scoped by organization_id,
-document_id (document agent) or kb_id (KB chat), and created_by (user).
+created_by (user), and optionally document_id / kb_id / scope=account.
 """
 from __future__ import annotations
 
@@ -19,6 +19,32 @@ import analytiq_data as ad
 logger = logging.getLogger(__name__)
 
 COLLECTION = "chat_threads"
+SCOPE_ACCOUNT = "account"
+
+
+def _validate_scope(
+    *,
+    document_id: str | None,
+    kb_id: str | None,
+    account: bool,
+) -> None:
+    n = sum(1 for x in (document_id is not None, kb_id is not None, account) if x)
+    if n != 1:
+        raise ValueError("Exactly one of document_id, kb_id, or account=True must be provided")
+
+
+def _scope_filter(
+    *,
+    document_id: str | None = None,
+    kb_id: str | None = None,
+    account: bool = False,
+) -> dict:
+    _validate_scope(document_id=document_id, kb_id=kb_id, account=account)
+    if account:
+        return {"scope": SCOPE_ACCOUNT}
+    if document_id is not None:
+        return {"document_id": document_id}
+    return {"kb_id": kb_id}
 
 
 def _thread_doc(
@@ -27,12 +53,12 @@ def _thread_doc(
     *,
     document_id: str | None = None,
     kb_id: str | None = None,
+    account: bool = False,
     title: str | None = None,
     messages: list[dict] | None = None,
     extraction: dict | None = None,
 ) -> dict:
-    if (document_id is None) == (kb_id is None):
-        raise ValueError("Exactly one of document_id or kb_id must be provided")
+    _validate_scope(document_id=document_id, kb_id=kb_id, account=account)
     now = datetime.now(UTC)
     doc: dict = {
         "organization_id": organization_id,
@@ -43,6 +69,8 @@ def _thread_doc(
         "created_at": now,
         "updated_at": now,
     }
+    if account:
+        doc["scope"] = SCOPE_ACCOUNT
     if document_id is not None:
         doc["document_id"] = document_id
     if kb_id is not None:
@@ -58,14 +86,13 @@ async def list_threads(
     *,
     document_id: str | None = None,
     kb_id: str | None = None,
+    account: bool = False,
 ) -> list[dict]:
     """
     List threads owned by the user (metadata only: id, title, created_at, updated_at).
-    Exactly one of document_id or kb_id must be provided. Most recent first.
+    Exactly one of document_id, kb_id, or account=True. Most recent first.
     """
-    if (document_id is None) == (kb_id is None):
-        raise ValueError("Exactly one of document_id or kb_id must be provided")
-    scope_filter: dict = {"document_id": document_id} if document_id is not None else {"kb_id": kb_id}
+    scope_filter = _scope_filter(document_id=document_id, kb_id=kb_id, account=account)
     db = ad.common.get_async_db(analytiq_client)
     coll = db[COLLECTION]
     cursor = coll.find(
@@ -130,13 +157,12 @@ async def get_thread_scoped(
     *,
     document_id: str | None = None,
     kb_id: str | None = None,
+    account: bool = False,
 ) -> dict | None:
     """
-    Get thread only if it belongs to the given document or knowledge base.
-    Exactly one of document_id or kb_id must be provided.
+    Get thread only if it belongs to the given scope.
+    Exactly one of document_id, kb_id, or account=True.
     """
-    if (document_id is None) == (kb_id is None):
-        raise ValueError("Exactly one of document_id or kb_id must be provided")
     oid = _object_id_or_none(thread_id)
     if oid is None:
         return None
@@ -144,11 +170,8 @@ async def get_thread_scoped(
         "_id": oid,
         "organization_id": organization_id,
         "created_by": user_id,
+        **_scope_filter(document_id=document_id, kb_id=kb_id, account=account),
     }
-    if document_id is not None:
-        query["document_id"] = document_id
-    else:
-        query["kb_id"] = kb_id
     db = ad.common.get_async_db(analytiq_client)
     coll = db[COLLECTION]
     doc = await coll.find_one(query)
@@ -165,11 +188,19 @@ async def create_thread(
     *,
     document_id: str | None = None,
     kb_id: str | None = None,
+    account: bool = False,
 ) -> str:
     """Create a new thread; returns thread id."""
     db = ad.common.get_async_db(analytiq_client)
     coll = db[COLLECTION]
-    doc = _thread_doc(organization_id, created_by, document_id=document_id, kb_id=kb_id, title=title)
+    doc = _thread_doc(
+        organization_id,
+        created_by,
+        document_id=document_id,
+        kb_id=kb_id,
+        account=account,
+        title=title,
+    )
     result = await coll.insert_one(doc)
     return str(result.inserted_id)
 
@@ -286,13 +317,12 @@ async def delete_thread(
     *,
     document_id: str | None = None,
     kb_id: str | None = None,
+    account: bool = False,
 ) -> bool:
     """
-    Delete a thread. Exactly one of document_id or kb_id must be provided so the
-    thread is deleted only when it belongs to that resource.
+    Delete a thread. Exactly one of document_id, kb_id, or account=True so the
+    thread is deleted only when it belongs to that scope.
     """
-    if (document_id is None) == (kb_id is None):
-        raise ValueError("Exactly one of document_id or kb_id must be provided")
     oid = _object_id_or_none(thread_id)
     if oid is None:
         return False
@@ -300,11 +330,8 @@ async def delete_thread(
         "_id": oid,
         "organization_id": organization_id,
         "created_by": user_id,
+        **_scope_filter(document_id=document_id, kb_id=kb_id, account=account),
     }
-    if document_id is not None:
-        query["document_id"] = document_id
-    else:
-        query["kb_id"] = kb_id
     db = ad.common.get_async_db(analytiq_client)
     coll = db[COLLECTION]
     result = await coll.delete_one(query)

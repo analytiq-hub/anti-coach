@@ -91,24 +91,34 @@ setup:
 	esac
 
 setup-python:
-	# Create and activate virtual environment if it doesn't exist
-	if [ ! -d ".venv" ]; then \
-		echo "Creating virtual environment..." ; \
-		python3 -m venv .venv ; \
+	# Prefer python3.11+ (sdk requires >=3.11). Recreate .venv if missing or too old.
+	@PY=$$(command -v python3.13 || command -v python3.12 || command -v python3.11 || true) ; \
+	if [ -z "$$PY" ]; then \
+		echo "Error: Python 3.11+ is required (found: $$(python3 --version 2>/dev/null || echo none))." ; \
+		echo "Install with: brew install python@3.11" ; \
+		exit 1 ; \
 	fi ; \
-	source .venv/bin/activate ; \
-	# Install uv if not already installed
-	if ! command -v uv &> /dev/null; then \
+	NEED_VENV=0 ; \
+	if [ ! -d ".venv" ]; then NEED_VENV=1 ; \
+	elif ! .venv/bin/python -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null ; then \
+		echo "Existing .venv uses $$(.venv/bin/python --version 2>/dev/null); recreating with $$PY..." ; \
+		NEED_VENV=1 ; \
+	fi ; \
+	if [ "$$NEED_VENV" = "1" ]; then \
+		rm -rf .venv ; \
+		echo "Creating virtual environment with $$PY..." ; \
+		"$$PY" -m venv .venv ; \
+	fi ; \
+	. .venv/bin/activate ; \
+	if ! command -v uv >/dev/null 2>&1 ; then \
 		echo "Installing uv..." ; \
 		curl -LsSf https://astral.sh/uv/install.sh | sh ; \
 	fi ; \
-	# Install build dependencies
-	uv pip install hatchling ; \
-	# Install packages in order
-	uv pip install -r packages/python/requirements.txt ; \
-	uv pip install -e packages/python/sdk ; \
-	# Ensure test dependencies are installed
-	uv pip install pytest-asyncio pytest-cov pytest-xdist
+	echo "Installing into .venv ($$(.venv/bin/python --version))..." ; \
+	uv pip install --python .venv/bin/python hatchling ; \
+	uv pip install --python .venv/bin/python -r packages/python/requirements.txt ; \
+	uv pip install --python .venv/bin/python -e packages/python/sdk ; \
+	uv pip install --python .venv/bin/python pytest-asyncio pytest-cov pytest-xdist
 
 setup-dev: setup-python setup-typescript
 

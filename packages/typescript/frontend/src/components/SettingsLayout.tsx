@@ -6,7 +6,7 @@ import { useAppSession } from '@/contexts/AppSessionContext';
 import {
   Person as UserIcon,
   Code as DeveloperIcon,
-  Business as OrganizationsIcon,
+  Payment as PaymentIcon,
   Group as UsersIcon,
   Build as DevelopmentIcon,
   Settings as SystemIcon,
@@ -68,14 +68,14 @@ const SettingsLayout: React.FC<SettingsLayoutProps> = ({
       ],
     },
     {
-      title: 'Organizations',
-      icon: OrganizationsIcon,
+      title: 'Account',
+      icon: PaymentIcon,
       items: [
         {
-          name: 'Organizations',
-          href: '/settings/organizations',
-          id: 'organizations',
-          icon: OrganizationsIcon,
+          name: 'Billing',
+          href: '/settings/subscription',
+          id: 'subscription',
+          icon: PaymentIcon,
           adminOnly: false,
         },
       ],

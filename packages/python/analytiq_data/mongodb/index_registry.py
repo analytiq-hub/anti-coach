@@ -280,6 +280,11 @@ _PHASE2_INDEXES: tuple[IndexSpec, ...] = (
         "chat_threads_kb_list_idx",
         [("organization_id", 1), ("kb_id", 1), ("created_by", 1), ("updated_at", -1)],
     ),
+    _spec(
+        "chat_threads",
+        "chat_threads_account_list_idx",
+        [("organization_id", 1), ("scope", 1), ("created_by", 1), ("updated_at", -1)],
+    ),
     # GridFS (AddGridFSFilesBucketIndexes) — only when bucket namespaces exist
     _spec(
         "files.files",

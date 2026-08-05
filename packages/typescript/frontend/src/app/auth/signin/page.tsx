@@ -43,7 +43,7 @@ export default function SigninPage() {
       if (result?.error) {
         setError(result.error);
       } else {
-        router.push('/dashboard');
+        router.push('/chat');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -75,7 +75,7 @@ export default function SigninPage() {
   };
 
   const handleSocialLogin = (provider: string) => {
-    signIn(provider, { callbackUrl: '/dashboard' });
+    signIn(provider, { callbackUrl: '/chat' });
   };
 
   return (

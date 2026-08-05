@@ -8,11 +8,11 @@ const SettingsPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/settings/user/developer');
+    router.replace('/settings/user/profile');
   }, [router]);
 
   return (
-    <SettingsLayout selectedMenu="user_developer">
+    <SettingsLayout selectedMenu="user_profile">
       <div className="flex justify-center items-center h-64">
         <div className="animate-pulse text-gray-500">
           Loading settings...

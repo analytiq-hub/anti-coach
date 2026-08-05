@@ -250,8 +250,18 @@ async def create_organization(
     organization: OrganizationCreate,
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new organization"""
+    """Create a new organization. Anti-coach: non-admins cannot create additional orgs."""
     db = ad.common.get_async_db()
+
+    if not await is_system_admin(current_user.user_id):
+        user_orgs = await db.organizations.count_documents({
+            "members.user_id": current_user.user_id
+        })
+        if user_orgs >= 1:
+            raise HTTPException(
+                status_code=403,
+                detail="Personal accounts cannot create additional organizations",
+            )
 
     # Check total organizations limit
     total_orgs = await db.organizations.count_documents({})
@@ -369,6 +379,15 @@ async def update_organization(
         update_data["name"] = organization_update.name
     
     if organization_update.members is not None:
+        # Anti-coach: personal accounts cannot add/remove members
+        if not is_sys_admin:
+            current_member_ids = {m.get("user_id") for m in organization.get("members", [])}
+            new_member_ids = {m.user_id for m in organization_update.members}
+            if current_member_ids != new_member_ids or len(organization_update.members) > 1:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Personal accounts cannot share or invite members",
+                )
         # Ensure at least one admin remains
         if not any(m.role == "admin" for m in organization_update.members):
             logger.error(f"Organization must have at least one admin: {organization_update.members}")
